@@ -76,7 +76,7 @@ defmodule Indexer.Fetcher.OnDemand.TokenBalance do
 
     latest_block_number = latest_block_number()
 
-    fetch_data = prepare_fetch_requests(entries_by_type[:fetch], latest_block_number)
+    fetch_data = prepare_fetch_requests(entries_by_type[:fetch] |> Enum.uniq(), latest_block_number)
 
     {historic_fetch_ft_requests, historic_fetch_nft_requests} =
       prepare_historic_fetch_requests(entries_by_type[:historic_fetch])
