@@ -8,13 +8,18 @@ services:
       - 'host.docker.internal:host-gateway'
     volumes:
       - "../proxy:/etc/nginx/templates"
+      - "../certbot/conf:/etc/letsencrypt"
+      - "../certbot/www:/var/www/certbot"
     environment:
       BACK_PROXY_PASS: ${BACK_PROXY_PASS:-http://backend:4000}
       FRONT_PROXY_PASS: ${FRONT_PROXY_PASS:-http://frontend:3000}
     ports:
       - target: 80
         published: 80
-      - target: 8080
-        published: 8080
-      - target: 8081
-        published: 8081
+      - target: 443
+        published: 443
+      - target: 8443
+        published: 8443
+      - target: 8444
+        published: 8444
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
