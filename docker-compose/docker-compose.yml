@@ -107,7 +107,7 @@ services:
     extends:
       file: ./services/nginx.yml
       service: proxy
-	  
+
   certbot:
     extends:
       file: ./services/certbot.yml

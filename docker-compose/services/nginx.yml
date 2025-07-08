@@ -22,4 +22,4 @@ services:
         published: 8443
       - target: 8444
         published: 8444
-    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & /docker-entrypoint.sh nginx -g \"daemon off;\"'"
