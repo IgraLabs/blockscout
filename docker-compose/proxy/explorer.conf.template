@@ -100,8 +100,8 @@ server {
     server_name  stats.explorer.devnet.igralabs.com;
 
     # SSL configuration
-    ssl_certificate /etc/letsencrypt/live/stats.explorer.devnet.igralabs.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/stats.explorer.devnet.igralabs.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/explorer.devnet.igralabs.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/explorer.devnet.igralabs.com/privkey.pem;
     
     # SSL security settings
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -154,8 +154,8 @@ server {
     server_name  visual.explorer.devnet.igralabs.com;
 
     # SSL configuration
-    ssl_certificate /etc/letsencrypt/live/visual.explorer.devnet.igralabs.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/visual.explorer.devnet.igralabs.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/explorer.devnet.igralabs.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/explorer.devnet.igralabs.com/privkey.pem;
     
     # SSL security settings
     ssl_protocols TLSv1.2 TLSv1.3;
