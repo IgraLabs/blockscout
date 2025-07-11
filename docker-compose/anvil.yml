@@ -30,7 +30,7 @@ services:
       - db:database
     environment:
         ETHEREUM_JSONRPC_VARIANT: 'anvil'
-        ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
+        ETHEREUM_JSONRPC_WS_URL: wss://devnet.igralabs.com:8545/9fb27a48631c486b9e5937ac140829d6/
         INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: 'true'
         INDEXER_DISABLE_PENDING_TRANSACTIONS_FETCHER: 'true'
         CHAIN_ID: '1337'
@@ -53,7 +53,7 @@ services:
       service: frontend
     environment:
       NEXT_PUBLIC_NETWORK_ID: '1337'
-      NEXT_PUBLIC_NETWORK_RPC_URL: http://host.docker.internal:8545/
+      NEXT_PUBLIC_NETWORK_RPC_URL: https://devnet.igralabs.com:8545/9fb27a48631c486b9e5937ac140829d6/
 
   stats-db-init:
     extends:
