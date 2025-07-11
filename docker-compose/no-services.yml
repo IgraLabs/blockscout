@@ -38,9 +38,9 @@ services:
     links:
       - db:database
     environment:
-        ETHEREUM_JSONRPC_HTTP_URL: https://devnet.igralabs.com:8545/9fb27a48631c486b9e5937ac140829d6/
-        ETHEREUM_JSONRPC_TRACE_URL: https://devnet.igralabs.com:8545/9fb27a48631c486b9e5937ac140829d6/
-        ETHEREUM_JSONRPC_WS_URL: wss://devnet.igralabs.com:8545/9fb27a48631c486b9e5937ac140829d6/
+        ETHEREUM_JSONRPC_HTTP_URL: http://host.docker.internal:8545/
+        ETHEREUM_JSONRPC_TRACE_URL: http://host.docker.internal:8545/
+        ETHEREUM_JSONRPC_WS_URL: ws://host.docker.internal:8545/
         CHAIN_ID: '1337'
 
   frontend:
