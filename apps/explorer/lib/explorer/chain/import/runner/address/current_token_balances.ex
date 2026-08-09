@@ -231,7 +231,7 @@ defmodule Explorer.Chain.Import.Runner.Address.CurrentTokenBalances do
     filtered_ctbs =
       Enum.filter(changes_list, fn ctb ->
         existing_ctb = existing_ctb_map[{ctb[:address_hash], ctb[:token_contract_address_hash], ctb[:token_id]}]
-        should_update?(ctb, existing_ctb)
+        should_update?(Map.put_new(ctb, :value_fetched_at, nil), existing_ctb)
       end)
 
     {:ok, filtered_ctbs}
@@ -308,7 +308,7 @@ defmodule Explorer.Chain.Import.Runner.Address.CurrentTokenBalances do
   # new ctb is the same height or older
   defp should_update?(new_ctb, existing_ctb) do
     existing_ctb.block_number == new_ctb.block_number and not is_nil(Map.get(new_ctb, :value)) and
-      (is_nil(existing_ctb.value_fetched_at) or existing_ctb.value_fetched_at < new_ctb.value_fetched_at)
+      (is_nil(existing_ctb.value_fetched_at) or Timex.before?(existing_ctb.value_fetched_at, new_ctb.value_fetched_at))
   end
 
   @spec insert(Repo.t(), [map()], %{
@@ -383,6 +383,8 @@ defmodule Explorer.Chain.Import.Runner.Address.CurrentTokenBalances do
           value_fetched_at: fragment("EXCLUDED.value_fetched_at"),
           old_value: current_token_balance.value,
           token_type: fragment("EXCLUDED.token_type"),
+          refetch_after: fragment("EXCLUDED.refetch_after"),
+          retries_count: fragment("EXCLUDED.retries_count"),
           inserted_at: fragment("LEAST(EXCLUDED.inserted_at, ?)", current_token_balance.inserted_at),
           updated_at: fragment("GREATEST(EXCLUDED.updated_at, ?)", current_token_balance.updated_at)
         ]
