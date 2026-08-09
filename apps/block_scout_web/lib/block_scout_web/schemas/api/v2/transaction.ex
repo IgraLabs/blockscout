@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-Blockscout
 defmodule BlockScoutWeb.Schemas.API.V2.Transaction.ChainTypeCustomizations do
   @moduledoc false
   alias BlockScoutWeb.API.V2.ZkSyncView
@@ -141,6 +142,18 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction.ChainTypeCustomizations do
     additionalProperties: false
   }
 
+  @eden_call_schema %Schema{
+    type: :object,
+    nullable: false,
+    properties: %{
+      to: General.AddressHashNullable,
+      value: General.IntegerString,
+      input: General.HexString
+    },
+    required: [:to, :value, :input],
+    additionalProperties: false
+  }
+
   @doc """
    Applies chain-specific field customizations to the given schema based on the configured chain type.
 
@@ -155,21 +168,6 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction.ChainTypeCustomizations do
   def chain_type_fields(schema) do
     chain_type()
     |> case do
-      :polygon_zkevm ->
-        schema
-        |> Helper.extend_schema(
-          properties: %{
-            zkevm_batch_number: %Schema{type: :integer, nullable: true},
-            zkevm_sequence_hash: General.FullHash,
-            zkevm_verify_hash: General.FullHash,
-            zkevm_status: %Schema{
-              type: :string,
-              enum: ["Confirmed by Sequencer", "L1 Confirmed"],
-              nullable: false
-            }
-          }
-        )
-
       :zksync ->
         schema |> Helper.extend_schema(properties: %{zksync: @zksync_schema})
 
@@ -212,6 +210,16 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction.ChainTypeCustomizations do
 
       :scroll ->
         schema |> Helper.extend_schema(properties: %{scroll: @scroll_schema})
+
+      :eden ->
+        schema
+        |> Helper.extend_schema(
+          properties: %{
+            fee_payer: %Schema{allOf: [Address], nullable: true},
+            calls: %Schema{type: :array, items: @eden_call_schema, nullable: true}
+          },
+          required: [:fee_payer, :calls]
+        )
 
       :suave ->
         schema
@@ -329,7 +337,6 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction do
 
   alias BlockScoutWeb.Schemas.API.V2.{Address, General, SignedAuthorization, TokenTransfer}
   alias BlockScoutWeb.Schemas.API.V2.Transaction.{ChainTypeCustomizations, Fee}
-  alias Explorer.Chain.TransactionAction
   alias OpenApiSpex.Schema
 
   OpenApiSpex.schema(
@@ -421,32 +428,6 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction do
         decoded_input: %Schema{allOf: [General.DecodedInput], nullable: true},
         token_transfers: %Schema{type: :array, items: TokenTransfer, nullable: true},
         token_transfers_overflow: %Schema{type: :boolean, nullable: true},
-        actions: %Schema{
-          type: :array,
-          items: %Schema{
-            type: :object,
-            required: [:protocol, :type, :data],
-            properties: %{
-              protocol: %Schema{
-                type: :string,
-                enum: TransactionAction.supported_protocols(),
-                nullable: false
-              },
-              type: %Schema{
-                type: :string,
-                enum: TransactionAction.supported_types(),
-                nullable: false
-              },
-              data: %Schema{
-                type: :object,
-                description: "Transaction action details (json formatted)",
-                nullable: false
-              }
-            },
-            additionalProperties: false
-          },
-          nullable: true
-        },
         exchange_rate: General.FloatStringNullable,
         historic_exchange_rate: General.FloatStringNullable,
         method: General.MethodNameNullable,
@@ -463,7 +444,8 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction do
               "token_creation",
               "token_transfer",
               "blob_transaction",
-              "set_code_transaction"
+              "set_code_transaction",
+              "sponsored_transaction"
             ]
           }
         },
@@ -475,7 +457,12 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction do
         },
         has_error_in_internal_transactions: %Schema{type: :boolean, nullable: true},
         authorization_list: %Schema{type: :array, items: SignedAuthorization, nullable: true},
-        is_pending_update: %Schema{type: :boolean, nullable: true}
+        is_pending_update: %Schema{type: :boolean, nullable: true},
+        fhe_operations_count: %Schema{
+          type: :integer,
+          description: "Number of FHE (Fully Homomorphic Encryption) operations in the transaction",
+          nullable: false
+        }
       },
       required: [
         :hash,
@@ -506,7 +493,6 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction do
         :decoded_input,
         :token_transfers,
         :token_transfers_overflow,
-        :actions,
         :exchange_rate,
         :historic_exchange_rate,
         :method,
@@ -514,7 +500,8 @@ defmodule BlockScoutWeb.Schemas.API.V2.Transaction do
         :transaction_tag,
         :has_error_in_internal_transactions,
         :authorization_list,
-        :is_pending_update
+        :is_pending_update,
+        :fhe_operations_count
       ],
       additionalProperties: false
     }
