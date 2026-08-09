@@ -29,6 +29,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
     branches:
       - master
+      - igra
 
 env:
   MIX_ENV: test
