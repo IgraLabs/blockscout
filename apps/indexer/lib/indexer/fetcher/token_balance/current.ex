@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-Blockscout
 defmodule Indexer.Fetcher.TokenBalance.Current do
   @moduledoc """
   Fetches current token balances and sends the ones that were fetched to be imported in `Address.CurrentTokenBalance`.
@@ -88,20 +89,8 @@ defmodule Indexer.Fetcher.TokenBalance.Current do
     }
 
     case Chain.import(import_params) do
-      {:ok, %{address_current_token_balances: imported_ctbs}} ->
-        imported_ctbs
-        |> Enum.group_by(& &1.address_hash)
-        |> Enum.each(fn {address_hash, ctbs} ->
-          Publisher.broadcast(
-            %{
-              address_current_token_balances: %{
-                address_hash: to_string(address_hash),
-                address_current_token_balances: ctbs
-              }
-            },
-            :realtime
-          )
-        end)
+      {:ok, %{address_current_token_balances: imported_ctbs}} when imported_ctbs != [] ->
+        Publisher.broadcast(%{address_current_token_balances: imported_ctbs}, :realtime)
 
       {:ok, _} ->
         :ok

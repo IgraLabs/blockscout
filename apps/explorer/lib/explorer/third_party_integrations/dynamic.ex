@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: LicenseRef-Blockscout
 defmodule Explorer.ThirdPartyIntegrations.Dynamic do
   @moduledoc """
   Provides integration with Dynamic for JWT-based user authentication.
@@ -16,6 +17,11 @@ defmodule Explorer.ThirdPartyIntegrations.Dynamic do
   alias Ueberauth.Auth.{Extra, Info}
 
   require Logger
+
+  @spec enabled? :: boolean()
+  def enabled? do
+    Application.get_env(:explorer, __MODULE__)[:enabled] || false
+  end
 
   @doc """
   Authenticates a user by verifying a JWT token and extracting identity information from its claims.
@@ -39,7 +45,7 @@ defmodule Explorer.ThirdPartyIntegrations.Dynamic do
   """
   @spec get_auth_from_token(String.t()) :: {:ok, Auth.t()} | {:error, String.t()} | {:enabled, false}
   def get_auth_from_token(token) do
-    with {:enabled, true} <- {:enabled, Application.get_env(:explorer, __MODULE__)[:enabled]},
+    with {:enabled, true} <- {:enabled, enabled?()},
          {:ok, claims} <- Token.verify_and_validate(token) do
       create_auth(claims)
     else
