@@ -1056,7 +1056,7 @@ defmodule BlockScoutWeb.API.V2.BlockControllerTest do
   end
 
   defp compare_item(%Withdrawal{} = withdrawal, json) do
-    assert withdrawal.index == json["index"]
+    assert to_string(withdrawal.index) == json["index"]
   end
 
   defp compare_item(%InternalTransaction{} = internal_transaction, json) do
