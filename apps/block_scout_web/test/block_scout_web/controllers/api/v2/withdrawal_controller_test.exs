@@ -51,7 +51,7 @@ defmodule BlockScoutWeb.API.V2.WithdrawalControllerTest do
   end
 
   defp compare_item(%Withdrawal{} = withdrawal, json) do
-    assert withdrawal.index == json["index"]
+    assert to_string(withdrawal.index) == json["index"]
   end
 
   defp check_paginated_response(first_page_resp, second_page_resp, list) do

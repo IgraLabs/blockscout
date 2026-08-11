@@ -71,7 +71,7 @@ defmodule BlockScoutWeb.AddressWithdrawalControllerTest do
 
       conn =
         get(conn, address_withdrawal_path(BlockScoutWeb.Endpoint, :index, Address.checksum(address.hash)), %{
-          "index" => first_page |> List.last() |> (& &1.index).() |> Integer.to_string(),
+          "index" => first_page |> List.last() |> (& &1.index).() |> to_string(),
           "type" => "JSON"
         })
 
