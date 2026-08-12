@@ -134,7 +134,7 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
 
       # Fetches a compiler from binaries.soliditylang.org and waits up to 300s for
       # a real verification result. Excluded by default -- see test_helper.exs.
-      @tag :solc_download
+      @tag :compiler_download
       test "success verification", %{conn: conn} do
         before = Application.get_env(:explorer, :solc_bin_api_url)
 
@@ -316,7 +316,7 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
 
       # Fetches a compiler from binaries.soliditylang.org and waits up to 300s for
       # a real verification result. Excluded by default -- see test_helper.exs.
-      @tag :solc_download
+      @tag :compiler_download
       test "success verification", %{conn: conn} do
         before = Application.get_env(:explorer, :solc_bin_api_url)
 

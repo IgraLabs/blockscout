@@ -8,7 +8,7 @@ defmodule BlockScoutWeb.AddressContractVerificationTest do
 
   # Real contract verification: needs a downloaded compiler.
 
-  @moduletag :solc_download
+  @moduletag :compiler_download
 
   setup do
     bypass = Bypass.open()
