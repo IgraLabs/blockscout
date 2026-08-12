@@ -35,10 +35,17 @@ defmodule Explorer.Migrator.FillingMigration do
 
     ```elixir
     config :explorer, MyMigrationModule,
-      batch_size: 500,  # Number of entities per batch (default: 500)
-      concurrency: 16,  # Number of parallel tasks (default: 4 * schedulers_online)
-      timeout: 0        # Delay between batches in ms (default: 0)
+      batch_size: 500,          # Number of entities per batch (default: 500)
+      concurrency: 48,          # Advisory parallelism (default: 4 * schedulers_online)
+      timeout: 0,               # Delay between batches in ms (default: 0)
+      task_timeout: :infinity,  # Per-batch task timeout in ms (default: :infinity)
+      completion_retry_interval: 60_000 # Delay before re-checking a rejected completion
     ```
+
+    Note that `concurrency` is **advisory**: it is not applied by this behaviour. Actual
+    parallelism equals the number of `batch_size` chunks in whatever
+    `last_unprocessed_identifiers/1` returns, so implementations are expected to size
+    their own query limit as `batch_size() * concurrency()`.
 
     The migration process will:
     1. Start and check if already completed
@@ -47,6 +54,28 @@ defmodule Explorer.Migrator.FillingMigration do
     4. Checkpoint progress after each batch in the database
     5. Execute post-migration tasks via `on_finish/0`
     6. Update completion status in both database and in-memory cache
+
+    ## Safety hooks
+
+    Three optional hooks exist for migrations where a wrong completion is expensive to
+    undo. All default to the historical behaviour, so existing migrations are unaffected:
+
+    - `batch_readiness/0` lets a migration **pause** without completing. Returning an
+      empty list from `last_unprocessed_identifiers/1` is indistinguishable from "done"
+      and unconditionally marks the migration completed, so it must never be used to
+      signal "not right now".
+    - `validate_completion/0` runs after the work appears finished but *before* the
+      migration is marked completed. Returning `{:error, reason}` reschedules instead.
+      This is the guard against completing on a transiently empty result.
+    - `task_timeout` bounds `Task.await_many/2`. The default `:infinity` means a single
+      hung `update_batch/1` (for example an unbounded JSON-RPC call) wedges the
+      migration permanently with no signal.
+
+    Completion writes the durable status *before* refreshing the cache. The reverse
+    order leaves a window where the cache reports a migration as completed while the
+    database does not, and readers trusting the cache take the post-migration code path
+    against un-migrated data. The chosen order fails the safe way: a cache that lags
+    behind a completed migration only costs a fallback path.
   """
 
   @doc """
@@ -161,7 +190,45 @@ defmodule Explorer.Migrator.FillingMigration do
   """
   @callback dependent_from_migrations :: list(String.t())
 
+  @doc """
+    Decides whether the next batch may run now.
+
+    Invoked before each batch. Returning `{:defer, delay_ms}` reschedules without
+    touching the migration status, which is the only safe way to pause: an empty list
+    from `last_unprocessed_identifiers/1` means "completed", not "not yet".
+
+    Defaults to `:ready`.
+  """
+  @callback batch_readiness :: :ready | {:defer, non_neg_integer()}
+
+  @doc """
+    Confirms the migration may be marked completed.
+
+    Invoked once `last_unprocessed_identifiers/1` returns an empty list, before
+    `on_finish/0` and before the status is written. Returning `{:error, reason}` logs
+    and reschedules rather than completing, so a transiently empty batch cannot
+    permanently mark the migration done.
+
+    Defaults to `:ok`.
+  """
+  @callback validate_completion :: :ok | {:error, term()}
+
   @optional_callbacks unprocessed_data_query: 0, unprocessed_data_query: 1
+
+  # Both safety callbacks have single-atom defaults, so a direct call from the
+  # injected code lets the compiler infer `dynamic(:ok)` / `dynamic(:ready)` for
+  # every module that does not override them and report the other branch as
+  # unreachable -- 29 modules' worth of warnings, which are errors under
+  # --warnings-as-errors. Dispatching through a module variable keeps the call
+  # dynamic, which is also the truth: these callbacks are overridable, so the
+  # default's return type is not the behaviour's return type.
+  @doc false
+  @spec batch_readiness(module()) :: :ready | {:defer, non_neg_integer()}
+  def batch_readiness(module), do: module.batch_readiness()
+
+  @doc false
+  @spec validate_completion(module()) :: :ok | {:error, term()}
+  def validate_completion(module), do: module.validate_completion()
 
   defmacro __using__(opts) do
     quote do
@@ -170,6 +237,8 @@ defmodule Explorer.Migrator.FillingMigration do
       use GenServer, restart: :transient
 
       import Ecto.Query
+
+      require Logger
 
       alias Explorer.Chain.Block
       alias Explorer.Migrator.HeavyDbIndexOperation.Helper, as: HeavyDbIndexOperationHelper
@@ -271,18 +340,28 @@ defmodule Explorer.Migrator.FillingMigration do
       # - `{:noreply, new_state}` when more batches remain to be processed
       @impl true
       def handle_info(:migrate_batch, state) do
+        case Explorer.Migrator.FillingMigration.batch_readiness(__MODULE__) do
+          :ready ->
+            run_migration_batch(state)
+
+          {:defer, delay} ->
+            # Deliberately does not touch the migration status. Deferring must be
+            # distinguishable from finishing.
+            schedule_batch_migration(delay)
+            {:noreply, state}
+        end
+      end
+
+      defp run_migration_batch(state) do
         case last_unprocessed_identifiers(state) do
           {[], new_state} ->
-            on_finish()
-            update_cache()
-            MigrationStatus.set_status(migration_name(), "completed")
-            {:stop, :normal, new_state}
+            finalize_migration(new_state)
 
           {identifiers, new_state} ->
             identifiers
             |> Enum.chunk_every(batch_size())
             |> Enum.map(&run_task/1)
-            |> Task.await_many(:infinity)
+            |> Task.await_many(task_timeout())
 
             unquote do
               if !opts[:skip_meta_update?] do
@@ -295,6 +374,40 @@ defmodule Explorer.Migrator.FillingMigration do
             schedule_batch_migration()
 
             {:noreply, new_state}
+        end
+      end
+
+      # An empty identifier list is the only completion signal this behaviour has, and
+      # it cannot distinguish "all work done" from "the query happened to return
+      # nothing this time". validate_completion/0 is the migration's chance to say so.
+      defp finalize_migration(state) do
+        case Explorer.Migrator.FillingMigration.validate_completion(__MODULE__) do
+          :ok ->
+            on_finish()
+
+            # Durable status first, then the cache. If the process dies between the
+            # two, a cache that lags behind a completed migration only costs a
+            # fallback path; a cache that reports completion the database does not
+            # have sends readers down the post-migration path against un-migrated data.
+            MigrationStatus.set_status(migration_name(), "completed")
+            update_cache()
+
+            {:stop, :normal, state}
+
+          {:error, reason} ->
+            Logger.error(fn ->
+              [
+                "Migration ",
+                migration_name(),
+                " reported no remaining work but validate_completion/0 rejected it: ",
+                inspect(reason),
+                ". Rescheduling instead of marking completed."
+              ]
+            end)
+
+            schedule_batch_migration(completion_retry_interval())
+
+            {:noreply, state}
         end
       end
 
@@ -342,6 +455,16 @@ defmodule Explorer.Migrator.FillingMigration do
         Application.get_env(:explorer, __MODULE__)[:concurrency] || default
       end
 
+      # Defaults to :infinity to preserve historical behaviour. Migrations whose
+      # update_batch/1 can block (JSON-RPC, external services) should set this.
+      defp task_timeout do
+        Application.get_env(:explorer, __MODULE__)[:task_timeout] || :infinity
+      end
+
+      defp completion_retry_interval do
+        Application.get_env(:explorer, __MODULE__)[:completion_retry_interval] || :timer.minutes(1)
+      end
+
       def on_finish do
         :ignore
       end
@@ -354,7 +477,19 @@ defmodule Explorer.Migrator.FillingMigration do
         []
       end
 
-      defoverridable on_finish: 0, before_start: 0, dependent_from_migrations: 0
+      def batch_readiness do
+        :ready
+      end
+
+      def validate_completion do
+        :ok
+      end
+
+      defoverridable on_finish: 0,
+                     before_start: 0,
+                     dependent_from_migrations: 0,
+                     batch_readiness: 0,
+                     validate_completion: 0
     end
   end
 end
