@@ -48,6 +48,9 @@ defmodule Explorer.Chain.Block.WallClockStatusTest do
     end
   end
 
+  # The constraints are enforced by PostgreSQL, but Ecto catches the violation
+  # and re-raises it as Ecto.ConstraintError naming the constraint -- Postgrex.Error
+  # never reaches the caller on an insert through the repo.
   describe "database constraints" do
     test "a block with no wall-clock fields is accepted" do
       # The all-NULL state is the entire existing table, so it must remain legal.
@@ -58,13 +61,13 @@ defmodule Explorer.Chain.Block.WallClockStatusTest do
       # The trap this guards: a CHECK evaluates to UNKNOWN on NULL and UNKNOWN
       # passes, so a constraint expressed only as `= 1` / `<> 1` would admit
       # this row. Every branch must pin the status explicitly.
-      assert_raise Postgrex.Error, ~r/wall_clock_fields_consistent/, fn ->
+      assert_raise Ecto.ConstraintError, ~r/wall_clock_fields_consistent/, fn ->
         insert(:block, wall_clock_timestamp: DateTime.utc_now(), wall_clock_decode_status: nil)
       end
     end
 
     test "rejects :ok without a timestamp" do
-      assert_raise Postgrex.Error, ~r/wall_clock_fields_consistent/, fn ->
+      assert_raise Ecto.ConstraintError, ~r/wall_clock_fields_consistent/, fn ->
         insert(:block,
           wall_clock_decode_status: WallClockStatus.value(:ok),
           wall_clock_timestamp: nil
@@ -74,7 +77,7 @@ defmodule Explorer.Chain.Block.WallClockStatusTest do
 
     test "rejects a terminal failure status carrying a timestamp" do
       for status <- [:no_root, :decode_failed, :orphan_unavailable] do
-        assert_raise Postgrex.Error, ~r/wall_clock_fields_consistent/, fn ->
+        assert_raise Ecto.ConstraintError, ~r/wall_clock_fields_consistent/, fn ->
           insert(:block,
             wall_clock_decode_status: WallClockStatus.value(status),
             wall_clock_timestamp: DateTime.utc_now()
@@ -97,7 +100,7 @@ defmodule Explorer.Chain.Block.WallClockStatusTest do
 
     test "rejects a root that is not exactly 32 bytes" do
       for bad <- [<<>>, :crypto.strong_rand_bytes(31), :crypto.strong_rand_bytes(33)] do
-        assert_raise Postgrex.Error, ~r/parent_beacon_block_root_is_32_bytes/, fn ->
+        assert_raise Ecto.ConstraintError, ~r/parent_beacon_block_root_is_32_bytes/, fn ->
           insert(:block, parent_beacon_block_root: bad)
         end
       end
