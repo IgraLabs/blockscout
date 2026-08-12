@@ -1,12 +1,19 @@
 # SPDX-License-Identifier: LicenseRef-Blockscout
 defmodule Explorer.SmartContract.Solidity.VerifierTest do
-  use ExUnit.Case, async: true
+  # async: false -- this suite sets Application.put_env(:tesla, :adapter, ...),
+  # which is process-global. Running it concurrently corrupts other suites'
+  # adapter and produces Mox.UnexpectedCallError on URLs nobody stubbed.
+  use ExUnit.Case, async: false
   use Explorer.DataCase
 
   use Utils.CompileTimeEnvHelper, chain_type: [:explorer, :chain_type]
 
   if @chain_type == :default do
     @moduletag timeout: :infinity
+    # Real compilation: needs a solc binary, downloading it from
+    # binaries.soliditylang.org when the build cache lacks it. Excluded from the
+    # default run; re-enable with `mix test --include solc_download`.
+    @moduletag :solc_download
 
     doctest Explorer.SmartContract.Solidity.Verifier
 
@@ -70,11 +77,15 @@ defmodule Explorer.SmartContract.Solidity.VerifierTest do
     setup do
       configuration = Application.get_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour)
       Application.put_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour, enabled: false)
+      # Capture the adapter actually in force so on_exit restores it.
+      tesla_adapter = Application.get_env(:tesla, :adapter)
       Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
 
       on_exit(fn ->
         Application.put_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour, configuration)
-        Application.put_env(:tesla, :adapter, Explorer.Mock.TeslaAdapter)
+        # Restores the value captured above, not a hardcoded default: assuming
+        # the default silently discards whatever else may have set it.
+        Application.put_env(:tesla, :adapter, tesla_adapter)
       end)
     end
 
