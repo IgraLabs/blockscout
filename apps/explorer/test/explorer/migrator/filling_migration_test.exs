@@ -32,8 +32,15 @@ defmodule Explorer.Migrator.FillingMigrationTest do
     def migration_name, do: "test_filling_migration_working"
     def unprocessed_data_query, do: nil
     def last_unprocessed_identifiers(state), do: {[1, 2, 3], Map.put(state, :seen, true)}
-    def update_batch(batch), do: Process.put(:batch, batch)
     def update_cache, do: Process.put(:cache_updated, true)
+
+    # update_batch/1 runs inside Task.async, so it cannot report back through the
+    # process dictionary -- that would write to the task's own dictionary. The
+    # test registers itself as the observer instead.
+    def update_batch(batch) do
+      send(Application.fetch_env!(:explorer, :filling_migration_test_observer), {:batch, batch})
+      :ok
+    end
   end
 
   # Reports no remaining work -- which the behaviour otherwise treats as "done" --
@@ -87,9 +94,12 @@ defmodule Explorer.Migrator.FillingMigrationTest do
       # row has to be started before a checkpoint can be observed.
       MigrationStatus.set_status(Working.migration_name(), "started")
 
+      Application.put_env(:explorer, :filling_migration_test_observer, self())
+      on_exit(fn -> Application.delete_env(:explorer, :filling_migration_test_observer) end)
+
       assert {:noreply, %{seen: true}} = Working.handle_info(:migrate_batch, %{})
 
-      assert Process.get(:batch) == [1, 2, 3]
+      assert_received {:batch, [1, 2, 3]}
       assert %{meta: %{"seen" => true}} = MigrationStatus.fetch(Working.migration_name())
 
       refute MigrationStatus.get_status(Working.migration_name()) == "completed"
