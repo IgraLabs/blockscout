@@ -752,12 +752,6 @@ defmodule EthereumJSONRPC.Transaction do
     }
 
   """
-  # Keeps the seeded map free of nil entries: a nil wall_clock_timestamp must be
-  # absent rather than present-and-nil, so the params mapping omits it entirely
-  # and the column keeps whatever the database already holds.
-  defp put_unless_nil(map, _key, nil), do: map
-  defp put_unless_nil(map, key, value), do: Map.put(map, key, value)
-
   def to_elixir(transaction, block_timestamp \\ nil, wall_clock_timestamp \\ nil)
 
   def to_elixir(transaction, block_timestamp, wall_clock_timestamp) when is_map(transaction) do
@@ -772,6 +766,12 @@ defmodule EthereumJSONRPC.Transaction do
   def to_elixir(transaction, _block_timestamp, _wall_clock_timestamp) when is_binary(transaction) do
     nil
   end
+
+  # Keeps the seeded map free of nil entries: a nil wall_clock_timestamp must be
+  # absent rather than present-and-nil, so the params mapping omits it entirely
+  # and the column keeps whatever the database already holds.
+  defp put_unless_nil(map, _key, nil), do: map
+  defp put_unless_nil(map, key, value), do: Map.put(map, key, value)
 
   def eth_call_request(id, block_number, data, to, from, gas, gas_price, value) do
     block =
