@@ -10,8 +10,14 @@ defmodule EthereumJSONRPC.Igra.WallClock do
       f(daa_score) = REF_TIMESTAMP + (daa_score - REF_DAA_SCORE) / 10
 
   The realized Kaspa rate is slightly below 10/s, so the synthetic clock runs
-  behind wall time and the gap widens monotonically. Rendering it faithfully
-  makes a sub-second-finality chain look stalled.
+  behind wall time. Rendering it faithfully makes a sub-second-finality chain
+  look stalled.
+
+  The offset is **not monotonic**. Measured over a 61-point series spanning the
+  chain (2026-08-12, pinned to the finalized boundary): realized rate 9.999626/s,
+  mean drift +3.23 s/day, but the offset ranges from **-187 s to +772 s**, changes
+  sign 12 times, and narrows in 30 of 60 sampled intervals. Nothing here may
+  assume the offset only grows, or that it is positive.
 
   Igra therefore carries a correction in the `parentBeaconBlockRoot` field.
   Despite the EIP-4788 name, on Igra that field does *not* hold a beacon root —
@@ -34,14 +40,21 @@ defmodule EthereumJSONRPC.Igra.WallClock do
 
   ## Validation status of each field
 
-  `block_count`, `first_daa_score` and `first_time_delta` are **validated**: an
-  independent verifier decoded all 13,930,499 canonical blocks with zero
-  failures, and the recovered times agree with observed wall clock.
+  Nothing here is protocol-confirmed. The layout is our reading of
+  `for-developers/igra-timestamp-mechanics`, whose published figures are known to
+  be stale, and written confirmation is still outstanding — see
+  `docs/igra-timestamp-phase0-preflight.md` §3.
 
-  `subsequent_deltas` are **not validated**. They are surfaced raw and
-  unsigned for diagnostics only. Nothing in this module or downstream may
-  depend on them until the protocol owners confirm their width and signedness.
-  See `docs/igra-timestamp-phase0-preflight.md`.
+  `block_count`, `first_daa_score` and `first_time_delta` are **corroborated**:
+  they decode consistently across sampled blocks spanning the chain, and the
+  recovered times agree with observed wall clock. An earlier claim that an
+  independent verifier decoded all 13,930,499 canonical blocks with zero failures
+  was **never recorded with a commit, seed, or output checksum**, so it does not
+  support this module; the full-chain scan is tracked as gate P2 and has not run.
+
+  `subsequent_deltas` are **not validated at all**. They are surfaced raw and
+  unsigned for diagnostics only. Nothing in this module or downstream may depend
+  on them until the protocol owners confirm their width and signedness.
 
   ## Versioning
 
@@ -50,7 +63,8 @@ defmodule EthereumJSONRPC.Igra.WallClock do
   encoding ever changes at a fork. Configure activations with:
 
       config :ethereum_jsonrpc, EthereumJSONRPC.Igra.WallClock,
-        decoder_activations: [{0, 1}, {20_000_000, 2}]
+        decoder_activations: [{0, 1}, {20_000_000, 2}],
+        genesis_heights: [0]
 
   Each tuple is `{activation_height, version}`, and a version applies from its
   activation height up to the next one. `{0, 1}` is the default.
@@ -149,26 +163,41 @@ defmodule EthereumJSONRPC.Igra.WallClock do
     version = version_for_height(height)
 
     if version in @supported_versions do
-      do_decode(version, root)
+      do_decode(version, height, root)
     else
       %Result{status: :decode_failed, decoder_version: version, error: :unsupported_decoder_version}
     end
   end
 
-  defp do_decode(version, nil), do: %Result{status: :decode_failed, decoder_version: version, error: :missing_root}
+  defp do_decode(version, _height, nil),
+    do: %Result{status: :decode_failed, decoder_version: version, error: :missing_root}
 
-  defp do_decode(version, root) do
+  defp do_decode(version, height, root) do
     case normalize_root(root) do
-      {:ok, bytes} -> decode_bytes(version, bytes)
+      {:ok, bytes} -> decode_bytes(version, height, bytes)
       {:error, reason} -> %Result{status: :decode_failed, decoder_version: version, error: reason}
     end
   end
 
-  # The all-zero root is genesis (and any block predating the encoding). It is a
-  # legitimate, terminal absence of data — not a decode failure.
-  defp decode_bytes(version, <<0::size(256)>>), do: %Result{status: :genesis, decoder_version: version}
+  # An all-zero root is only legitimate at a known genesis height. Treating it as
+  # genesis at *any* height would silently convert an anomaly -- a node serving a
+  # zeroed field, a pre-encoding block, an encoding change -- into a terminal
+  # "no data here, nothing to retry", losing the row permanently and without a
+  # signal. At an unexpected height it is a failure, which a later decoder
+  # version may revisit.
+  #
+  # Whether heights other than 0 legitimately carry a zero root is protocol
+  # question 4 and is not yet answered, so the set is configurable rather than
+  # hardcoded to [0].
+  defp decode_bytes(version, height, <<0::size(256)>>) do
+    if height in genesis_heights() do
+      %Result{status: :genesis, decoder_version: version}
+    else
+      %Result{status: :decode_failed, decoder_version: version, error: :unexpected_zero_root}
+    end
+  end
 
-  defp decode_bytes(version, <<
+  defp decode_bytes(version, _height, <<
          block_count::size(@block_count_bits),
          first_daa_score::size(@first_daa_score_bits),
          raw_first_time_delta::size(@first_time_delta_bits),
@@ -274,6 +303,12 @@ defmodule EthereumJSONRPC.Igra.WallClock do
 
   defp normalize_root(root) when is_binary(root), do: {:error, :invalid_root_length}
   defp normalize_root(_root), do: {:error, :malformed_root}
+
+  defp genesis_heights do
+    :ethereum_jsonrpc
+    |> Application.get_env(__MODULE__, [])
+    |> Keyword.get(:genesis_heights, [0])
+  end
 
   defp decoder_activations do
     :ethereum_jsonrpc
