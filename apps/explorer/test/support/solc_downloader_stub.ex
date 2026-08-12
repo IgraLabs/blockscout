@@ -63,7 +63,7 @@ defmodule Explorer.Test.SolcDownloaderStub do
   Callers must be `async: false`. There is no way to scope a global setting to a
   process, so an async caller corrupts every concurrent test.
   """
-  @spec put_tesla_adapter(module(), (-> any())) :: :ok
+  @spec put_tesla_adapter(module(), ((-> any()) -> any())) :: :ok
   def put_tesla_adapter(adapter, on_exit_fun) do
     previous = Application.get_env(:tesla, :adapter)
     Application.put_env(:tesla, :adapter, adapter)

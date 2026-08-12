@@ -4,6 +4,11 @@ defmodule Explorer.SmartContract.Solidity.PublisherTest do
   # which is process-global. Running it concurrently corrupts other suites'
   # adapter and produces Mox.UnexpectedCallError on URLs nobody stubbed.
   use ExUnit.Case, async: false
+
+  # Publisher.publish/2 compiles Solidity, so this suite needs a solc binary and
+  # downloads it when the build cache lacks one. Excluded from the default run;
+  # re-enable with `mix test --include solc_download`.
+  @moduletag :solc_download
   use Explorer.DataCase
 
   use Utils.CompileTimeEnvHelper, chain_type: [:explorer, :chain_type]
