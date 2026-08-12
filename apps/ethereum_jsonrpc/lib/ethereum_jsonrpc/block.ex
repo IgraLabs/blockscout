@@ -10,6 +10,7 @@ defmodule EthereumJSONRPC.Block do
 
   alias EthereumJSONRPC.{Transactions, Uncles, Withdrawals}
 
+  alias EthereumJSONRPC.Igra.WallClock.BlockParams, as: IgraWallClockBlockParams
   alias EthereumJSONRPC.Zilliqa.AggregateQuorumCertificate, as: ZilliqaAggregateQuorumCertificate
   alias EthereumJSONRPC.Zilliqa.QuorumCertificate, as: ZilliqaQuorumCertificate
 
@@ -363,7 +364,7 @@ defmodule EthereumJSONRPC.Block do
     # chain_type_fields/2 on purpose: this is an Igra correction, not a property
     # of a chain type, and coupling it to one would apply it to every chain of
     # that type.
-    |> EthereumJSONRPC.Igra.WallClock.BlockParams.merge(elixir)
+    |> IgraWallClockBlockParams.merge(elixir)
   end
 
   defp do_elixir_to_params(
