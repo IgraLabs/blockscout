@@ -20,13 +20,13 @@ Bureaucrat.start(
 
 # Bureaucrat.start()
 
-# :solc_download marks tests that compile a contract for real, fetching the
+# :compiler_download marks tests that compile a contract for real, fetching the
 # compiler from binaries.soliditylang.org. They fail on network or cache state
 # rather than on the code under test. Excluded by default; run deliberately with
-# `mix test --include solc_download`. Mirrors apps/explorer/test/test_helper.exs.
+# `mix test --include compiler_download`. Mirrors apps/explorer/test/test_helper.exs.
 ExUnit.configure(
   formatters: [JUnitFormatter, ExUnit.CLIFormatter, Bureaucrat.Formatter],
-  exclude: [:solc_download]
+  exclude: [:compiler_download]
 )
 
 ExUnit.start()

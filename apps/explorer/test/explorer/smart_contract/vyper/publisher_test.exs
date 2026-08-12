@@ -6,6 +6,12 @@ if Application.compile_env(:explorer, :chain_type) !== :zksync do
     # adapter and produces Mox.UnexpectedCallError on URLs nobody stubbed.
     use ExUnit.Case, async: false
 
+    # Publisher.publish/2 compiles Vyper, and VyperDownloader fetches the compiler
+    # from github.com/vyperlang/vyper/releases when the build cache lacks it. This
+    # is a second downloader with a different host from solc -- the failure looks
+    # identical from CI but shares none of solc's code path.
+    @moduletag :compiler_download
+
     use Explorer.DataCase
 
     doctest Explorer.SmartContract.Vyper.Publisher

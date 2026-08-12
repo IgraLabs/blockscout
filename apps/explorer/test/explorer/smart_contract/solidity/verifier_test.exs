@@ -12,8 +12,8 @@ defmodule Explorer.SmartContract.Solidity.VerifierTest do
     @moduletag timeout: :infinity
     # Real compilation: needs a solc binary, downloading it from
     # binaries.soliditylang.org when the build cache lacks it. Excluded from the
-    # default run; re-enable with `mix test --include solc_download`.
-    @moduletag :solc_download
+    # default run; re-enable with `mix test --include compiler_download`.
+    @moduletag :compiler_download
 
     doctest Explorer.SmartContract.Solidity.Verifier
 
