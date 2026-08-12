@@ -180,11 +180,38 @@ defmodule EthereumJSONRPC.Igra.WallClockTest do
   end
 
   describe "decode/2 genesis and malformed input" do
-    test "the all-zero root is genesis, not a failure" do
+    test "the all-zero root is genesis at height 0" do
       zero = "0x" <> String.duplicate("0", 64)
 
       assert %Result{status: :genesis, decoder_version: 1, wall_clock_timestamp: nil} = WallClock.decode(0, zero)
       assert %Result{status: :genesis} = WallClock.decode(0, <<0::size(256)>>)
+    end
+
+    test "an all-zero root above genesis is a failure, not genesis" do
+      # Treating it as :genesis at any height silently converts an anomaly into a
+      # terminal "no data here", losing the row permanently and with no signal.
+      for height <- [1, 1_000_000, 14_077_309] do
+        assert %Result{status: :decode_failed, error: :unexpected_zero_root} =
+                 WallClock.decode(height, <<0::size(256)>>),
+               "height #{height} treated a zero root as genesis"
+      end
+    end
+
+    test "additional genesis heights are configurable" do
+      # Whether heights other than 0 legitimately carry a zero root is protocol
+      # question 4, still unanswered -- so it must be settable without a code change.
+      previous = Application.get_env(:ethereum_jsonrpc, @env_key, [])
+      Application.put_env(:ethereum_jsonrpc, @env_key, Keyword.put(previous, :genesis_heights, [0, 42]))
+      on_exit(fn -> Application.put_env(:ethereum_jsonrpc, @env_key, previous) end)
+
+      assert %Result{status: :genesis} = WallClock.decode(42, <<0::size(256)>>)
+      assert %Result{status: :genesis} = WallClock.decode(0, <<0::size(256)>>)
+      assert %Result{status: :decode_failed, error: :unexpected_zero_root} = WallClock.decode(43, <<0::size(256)>>)
+    end
+
+    test "a non-zero root at height 0 still decodes normally" do
+      # Genesis is defined by the zero root, not by the height alone.
+      assert %Result{status: :ok} = WallClock.decode(0, root(1, @ref_daa_score, 0))
     end
 
     test "a nil root fails without raising" do
