@@ -17,7 +17,7 @@ defmodule Explorer.Test.SolcDownloaderStub do
 
   This module makes the dependency explicit. Tests that do not exercise real
   compilation use the stub and never touch the network; tests that genuinely
-  compile are tagged `:solc_download` and excluded from the default run.
+  compile are tagged `:compiler_download` and excluded from the default run.
   """
 
   @doc """

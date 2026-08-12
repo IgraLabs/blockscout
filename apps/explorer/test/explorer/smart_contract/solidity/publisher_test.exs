@@ -7,8 +7,8 @@ defmodule Explorer.SmartContract.Solidity.PublisherTest do
 
   # Publisher.publish/2 compiles Solidity, so this suite needs a solc binary and
   # downloads it when the build cache lacks one. Excluded from the default run;
-  # re-enable with `mix test --include solc_download`.
-  @moduletag :solc_download
+  # re-enable with `mix test --include compiler_download`.
+  @moduletag :compiler_download
   use Explorer.DataCase
 
   use Utils.CompileTimeEnvHelper, chain_type: [:explorer, :chain_type]
