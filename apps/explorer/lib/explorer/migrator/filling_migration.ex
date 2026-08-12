@@ -215,6 +215,21 @@ defmodule Explorer.Migrator.FillingMigration do
 
   @optional_callbacks unprocessed_data_query: 0, unprocessed_data_query: 1
 
+  # Both safety callbacks have single-atom defaults, so a direct call from the
+  # injected code lets the compiler infer `dynamic(:ok)` / `dynamic(:ready)` for
+  # every module that does not override them and report the other branch as
+  # unreachable -- 29 modules' worth of warnings, which are errors under
+  # --warnings-as-errors. Dispatching through a module variable keeps the call
+  # dynamic, which is also the truth: these callbacks are overridable, so the
+  # default's return type is not the behaviour's return type.
+  @doc false
+  @spec batch_readiness(module()) :: :ready | {:defer, non_neg_integer()}
+  def batch_readiness(module), do: module.batch_readiness()
+
+  @doc false
+  @spec validate_completion(module()) :: :ok | {:error, term()}
+  def validate_completion(module), do: module.validate_completion()
+
   defmacro __using__(opts) do
     quote do
       @behaviour Explorer.Migrator.FillingMigration
@@ -325,7 +340,7 @@ defmodule Explorer.Migrator.FillingMigration do
       # - `{:noreply, new_state}` when more batches remain to be processed
       @impl true
       def handle_info(:migrate_batch, state) do
-        case batch_readiness() do
+        case Explorer.Migrator.FillingMigration.batch_readiness(__MODULE__) do
           :ready ->
             run_migration_batch(state)
 
@@ -366,7 +381,7 @@ defmodule Explorer.Migrator.FillingMigration do
       # it cannot distinguish "all work done" from "the query happened to return
       # nothing this time". validate_completion/0 is the migration's chance to say so.
       defp finalize_migration(state) do
-        case validate_completion() do
+        case Explorer.Migrator.FillingMigration.validate_completion(__MODULE__) do
           :ok ->
             on_finish()
 

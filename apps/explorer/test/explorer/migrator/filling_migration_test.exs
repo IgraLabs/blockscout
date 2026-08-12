@@ -83,10 +83,14 @@ defmodule Explorer.Migrator.FillingMigrationTest do
     end
 
     test "the batch path still processes and checkpoints" do
+      # update_meta/2 is a no-op when the migration row does not exist yet, so the
+      # row has to be started before a checkpoint can be observed.
+      MigrationStatus.set_status(Working.migration_name(), "started")
+
       assert {:noreply, %{seen: true}} = Working.handle_info(:migrate_batch, %{})
 
       assert Process.get(:batch) == [1, 2, 3]
-      assert %{status: _, meta: %{"seen" => true}} = MigrationStatus.fetch(Working.migration_name())
+      assert %{meta: %{"seen" => true}} = MigrationStatus.fetch(Working.migration_name())
 
       refute MigrationStatus.get_status(Working.migration_name()) == "completed"
     end
@@ -156,7 +160,7 @@ defmodule Explorer.Migrator.FillingMigrationTest do
       Process.flag(:trap_exit, true)
       pid = spawn_link(fn -> Slow.handle_info(:migrate_batch, %{}) end)
 
-      assert_receive {:EXIT, ^pid, {:timeout, _}}, :timer.seconds(5)
+      assert_receive {:EXIT, ^pid, {:timeout, _}}, 5_000
     end
   end
 end
