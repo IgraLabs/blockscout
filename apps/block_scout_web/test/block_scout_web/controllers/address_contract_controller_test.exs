@@ -9,10 +9,13 @@ defmodule BlockScoutWeb.AddressContractControllerTest do
   alias Explorer.{Factory, TestHelper}
 
   setup do
+    # Capture the adapter in force so on_exit restores it, rather than
+    # assuming the default and discarding whatever else may have set it.
+    tesla_adapter = Application.get_env(:tesla, :adapter)
     Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
 
     on_exit(fn ->
-      Application.put_env(:tesla, :adapter, Explorer.Mock.TeslaAdapter)
+      Application.put_env(:tesla, :adapter, tesla_adapter)
     end)
   end
 
