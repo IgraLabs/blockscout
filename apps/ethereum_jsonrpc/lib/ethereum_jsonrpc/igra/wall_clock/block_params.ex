@@ -86,11 +86,32 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParams do
   @spec timestamp_for(map()) :: DateTime.t() | nil
   def timestamp_for(elixir) do
     if enabled?() do
-      case decode(Map.get(elixir, "number"), Map.get(elixir, "parentBeaconBlockRoot")) do
+      case decode(height(elixir), Map.get(elixir, "parentBeaconBlockRoot")) do
         %WallClock.Result{status: :ok, wall_clock_timestamp: timestamp} -> timestamp
         _other -> nil
       end
     end
+  end
+
+  # This is called from two places at different stages of parsing: from
+  # elixir_to_params/1, where "number" is already an integer, and from the
+  # transactions branch of entry_to_elixir/2, where the block is still raw
+  # JSON-RPC and "number" is a quantity such as "0x0". Normalising here rather
+  # than assuming one shape -- an unhandled shape used to raise a
+  # FunctionClauseError from inside block parsing, which would abort the import
+  # of an entire block.
+  defp height(elixir) do
+    case Map.get(elixir, "number") do
+      number when is_integer(number) -> number
+      "0x" <> _ = quantity -> safe_quantity_to_integer(quantity)
+      _other -> nil
+    end
+  end
+
+  defp safe_quantity_to_integer(quantity) do
+    EthereumJSONRPC.quantity_to_integer(quantity)
+  rescue
+    _error -> nil
   end
 
   @doc "Whether dual-write is currently enabled."
@@ -102,7 +123,7 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParams do
   end
 
   defp do_merge(params, elixir) do
-    number = Map.get(elixir, "number")
+    number = height(elixir)
     root = Map.get(elixir, "parentBeaconBlockRoot")
 
     result = decode(number, root)
@@ -114,8 +135,11 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParams do
   # A block with no number cannot have its decoder version selected by height,
   # and height-based selection is the whole point of the versioning scheme -- so
   # this is a failure rather than a guess at version 1.
-  defp decode(nil, _root), do: %WallClock.Result{status: :decode_failed, error: :missing_block_number}
-  defp decode(number, root), do: WallClock.decode(number, root)
+  defp decode(number, root) when is_integer(number) and number >= 0, do: WallClock.decode(number, root)
+
+  # Covers nil and anything unparseable. Never raises: a block whose height we
+  # cannot determine must be recorded as a decode failure, not crash the import.
+  defp decode(_number, _root), do: %WallClock.Result{status: :decode_failed, error: :missing_block_number}
 
   defp fields(%WallClock.Result{status: :ok} = result, root) do
     %{

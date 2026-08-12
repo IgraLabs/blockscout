@@ -1,5 +1,8 @@
 defmodule EthereumJSONRPC.Igra.WallClock.BlockParamsTest do
-  use ExUnit.Case, async: true
+  # async: false -- this suite mutates Application env, which is process-global.
+  # Running it concurrently leaks dual_write_enabled into unrelated suites and
+  # turns decoding on underneath them.
+  use ExUnit.Case, async: false
 
   alias EthereumJSONRPC.Igra.WallClock
   alias EthereumJSONRPC.Igra.WallClock.BlockParams
@@ -178,6 +181,39 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParamsTest do
     test "genesis yields nil rather than a timestamp" do
       enable(true)
       assert BlockParams.timestamp_for(elixir(0, "0x" <> String.duplicate("0", 64))) == nil
+    end
+  end
+
+  describe "raw JSON-RPC block shapes" do
+    setup do
+      enable(true)
+      :ok
+    end
+
+    test "a hex-quantity height is accepted, not a crash" do
+      # entry_to_elixir/2 calls timestamp_for/1 while the block is still raw, so
+      # "number" is a quantity like "0x0". This raised FunctionClauseError from
+      # inside block parsing, which aborts the import of the whole block.
+      assert BlockParams.timestamp_for(%{"number" => "0xD62E47", "parentBeaconBlockRoot" => @root}) ==
+               BlockParams.timestamp_for(elixir())
+    end
+
+    test "merge/2 accepts a hex-quantity height too" do
+      params = BlockParams.merge(%{}, %{"number" => "0xD62E47", "parentBeaconBlockRoot" => @root})
+
+      assert params.wall_clock_decode_status == @status_ok
+      assert %DateTime{} = params.wall_clock_timestamp
+    end
+
+    test "an unusable height is a decode failure, never a raise" do
+      for number <- [nil, "0x", "not-a-quantity", -1, %{}, "0xzz"] do
+        params = BlockParams.merge(%{}, %{"number" => number, "parentBeaconBlockRoot" => @root})
+
+        assert params.wall_clock_decode_status == @status_decode_failed,
+               "#{inspect(number)} should be a decode failure"
+
+        assert BlockParams.timestamp_for(%{"number" => number, "parentBeaconBlockRoot" => @root}) == nil
+      end
     end
   end
 
