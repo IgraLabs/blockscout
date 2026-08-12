@@ -165,6 +165,13 @@ defmodule Explorer.Chain.Block.Schema do
         field(:number, :integer, null: false)
         field(:size, :integer)
         field(:timestamp, :utc_datetime_usec, null: false)
+        # Igra wall-clock correction. `timestamp` above is consensus data and is
+        # never overwritten; these are additive and independently nullable.
+        # Nothing writes them yet -- see docs/igra-timestamp-phase0-preflight.md.
+        field(:wall_clock_timestamp, :utc_datetime_usec)
+        field(:parent_beacon_block_root, :binary)
+        field(:wall_clock_decode_status, :integer)
+        field(:wall_clock_decoder_version, :integer)
         field(:total_difficulty, :decimal)
         field(:refetch_needed, :boolean)
         field(:base_fee_per_gas, Wei)
@@ -244,7 +251,9 @@ defmodule Explorer.Chain.Block do
   alias Explorer.MicroserviceInterfaces.MultichainSearch
   alias Explorer.Utility.MissingBlockRange
 
-  @optional_attrs ~w(size refetch_needed total_difficulty difficulty base_fee_per_gas)a
+  @optional_attrs ~w(size refetch_needed total_difficulty difficulty base_fee_per_gas
+                     wall_clock_timestamp parent_beacon_block_root wall_clock_decode_status
+                     wall_clock_decoder_version)a
 
   @chain_type_optional_attrs (case @chain_type do
                                 :rsk ->

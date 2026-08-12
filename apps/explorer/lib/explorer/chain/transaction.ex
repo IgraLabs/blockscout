@@ -222,6 +222,9 @@ defmodule Explorer.Chain.Transaction.Schema do
         field(:block_number, :integer)
         field(:block_consensus, :boolean)
         field(:block_timestamp, :utc_datetime_usec)
+        # Copied from the referenced block's recovered wall clock. Must be kept
+        # in step with block_hash on reorg/re-inclusion. Nothing writes it yet.
+        field(:wall_clock_timestamp, :utc_datetime_usec)
         field(:cumulative_gas_used, :decimal)
         field(:earliest_processing_start, :utc_datetime_usec)
         field(:error, :string)
@@ -357,7 +360,8 @@ defmodule Explorer.Chain.Transaction do
                      block_consensus block_timestamp created_contract_address_hash
                      cumulative_gas_used earliest_processing_start error gas_price
                      gas_used index created_contract_code_indexed_at status
-                     to_address_hash revert_reason type has_error_in_internal_transactions r s v)a
+                     to_address_hash revert_reason type has_error_in_internal_transactions r s v
+                     wall_clock_timestamp)a
 
   @chain_type_optional_attrs (case @chain_type do
                                 :optimism ->
