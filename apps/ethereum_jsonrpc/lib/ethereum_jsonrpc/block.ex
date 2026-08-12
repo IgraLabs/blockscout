@@ -359,6 +359,11 @@ defmodule EthereumJSONRPC.Block do
     elixir
     |> do_elixir_to_params()
     |> chain_type_fields(elixir)
+    # No-op unless Igra wall-clock dual-write is explicitly enabled. Kept out of
+    # chain_type_fields/2 on purpose: this is an Igra correction, not a property
+    # of a chain type, and coupling it to one would apply it to every chain of
+    # that type.
+    |> EthereumJSONRPC.Igra.WallClock.BlockParams.merge(elixir)
   end
 
   defp do_elixir_to_params(
@@ -935,6 +940,14 @@ defmodule EthereumJSONRPC.Block do
                       withdrawalsRoot bitcoinMergedMiningHeader bitcoinMergedMiningCoinbaseTransaction
                       bitcoinMergedMiningMerkleProof hashForMergedMining sendRoot),
        do: entry
+
+  # Igra encodes a wall-clock correction here. Without this clause the field
+  # falls through to the catch-all below and is discarded before anything can
+  # read it. Retained as the raw hex string; decoding happens in
+  # EthereumJSONRPC.Igra.WallClock.BlockParams, and only when enabled.
+  defp entry_to_elixir({"parentBeaconBlockRoot" = key, root}, _block) do
+    {key, root}
+  end
 
   defp entry_to_elixir({"timestamp" = key, timestamp}, _block) do
     {key, timestamp_to_datetime(timestamp)}
