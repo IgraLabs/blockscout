@@ -384,6 +384,9 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
           eth_bytecode_db?: true
         )
 
+        # Bound here, not in setup: this test restores the adapter itself at the
+        # end rather than via on_exit.
+        tesla_adapter = Application.get_env(:tesla, :adapter)
         Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
 
         Bypass.expect_once(bypass, "POST", "/api/v2//verifier/vyper/sources%3Averify-multi-part", fn conn ->
