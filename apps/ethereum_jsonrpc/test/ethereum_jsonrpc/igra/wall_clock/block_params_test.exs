@@ -148,6 +148,39 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParamsTest do
     end
   end
 
+  describe "timestamp_for/1 -- the value stamped onto a block's transactions" do
+    test "nil while disabled, so transactions are untouched" do
+      enable(false)
+      assert BlockParams.timestamp_for(elixir()) == nil
+    end
+
+    test "matches the block's own wall_clock_timestamp exactly" do
+      enable(true)
+
+      # A transaction carrying a different instant from its own block would be
+      # worse than carrying none: it would look authoritative and be wrong.
+      assert BlockParams.timestamp_for(elixir()) == BlockParams.merge(%{}, elixir()).wall_clock_timestamp
+    end
+
+    test "nil for every non-ok outcome, never a partial value" do
+      enable(true)
+
+      for elixir <- [
+            %{"number" => @height},
+            elixir(@height, "0xzz"),
+            elixir(@height, "0x" <> String.duplicate("0", 64)),
+            %{"parentBeaconBlockRoot" => @root}
+          ] do
+        assert BlockParams.timestamp_for(elixir) == nil, "#{inspect(elixir)} should yield nil"
+      end
+    end
+
+    test "genesis yields nil rather than a timestamp" do
+      enable(true)
+      assert BlockParams.timestamp_for(elixir(0, "0x" <> String.duplicate("0", 64))) == nil
+    end
+  end
+
   describe "telemetry" do
     setup do
       enable(true)

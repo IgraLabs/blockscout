@@ -76,6 +76,23 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParams do
     end
   end
 
+  @doc """
+  The block's recovered wall-clock time, or `nil`.
+
+  Used to stamp the block's transactions with the same value. Returns `nil`
+  whenever dual-write is disabled or the block does not decode, so callers need
+  no flag check of their own.
+  """
+  @spec timestamp_for(map()) :: DateTime.t() | nil
+  def timestamp_for(elixir) do
+    if enabled?() do
+      case decode(Map.get(elixir, "number"), Map.get(elixir, "parentBeaconBlockRoot")) do
+        %WallClock.Result{status: :ok, wall_clock_timestamp: timestamp} -> timestamp
+        _other -> nil
+      end
+    end
+  end
+
   @doc "Whether dual-write is currently enabled."
   @spec enabled? :: boolean()
   def enabled? do

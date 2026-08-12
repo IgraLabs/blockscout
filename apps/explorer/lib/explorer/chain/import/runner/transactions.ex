@@ -200,6 +200,18 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              # Deliberately absent from the IS DISTINCT FROM tuple below. That
+              # tuple decides WHETHER to update; this decides what an update
+              # writes. wall_clock_timestamp is a pure function of the block, so
+              # it can only change when block_hash/block_number/block_timestamp
+              # change -- all already in the tuple. Adding it there would mean
+              # editing a positional ?-placeholder list where a miscount
+              # silently changes which rows are considered changed, for no gain.
+              #
+              # Consequence: enabling dual-write does not retroactively populate
+              # transactions of blocks that are never re-imported. That is the
+              # backfill's job, not this clause's.
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),
@@ -298,6 +310,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),
@@ -372,6 +385,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),
@@ -460,6 +474,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),
@@ -532,6 +547,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),
@@ -606,6 +622,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),
@@ -695,6 +712,7 @@ defmodule Explorer.Chain.Import.Runner.Transactions do
               block_number: fragment("EXCLUDED.block_number"),
               block_consensus: fragment("EXCLUDED.block_consensus"),
               block_timestamp: fragment("EXCLUDED.block_timestamp"),
+              wall_clock_timestamp: fragment("EXCLUDED.wall_clock_timestamp"),
               created_contract_address_hash: fragment("EXCLUDED.created_contract_address_hash"),
               created_contract_code_indexed_at: fragment("EXCLUDED.created_contract_code_indexed_at"),
               cumulative_gas_used: fragment("EXCLUDED.cumulative_gas_used"),

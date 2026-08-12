@@ -152,9 +152,9 @@ defmodule EthereumJSONRPC.Transactions do
       ]
 
   """
-  def to_elixir(transactions, block_timestamp \\ nil) when is_list(transactions) do
+  def to_elixir(transactions, block_timestamp \\ nil, wall_clock_timestamp \\ nil) when is_list(transactions) do
     transactions
-    |> Enum.map(&Transaction.to_elixir(&1, block_timestamp))
+    |> Enum.map(&Transaction.to_elixir(&1, block_timestamp, wall_clock_timestamp))
     |> Enum.filter(&(!is_nil(&1)))
   end
 end
