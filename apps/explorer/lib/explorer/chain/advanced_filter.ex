@@ -462,38 +462,6 @@ defmodule Explorer.Chain.AdvancedFilter do
            transaction_index: transaction_index,
            internal_transaction_index: nil
          }
-       })
-       when block_number > 0 and transaction_index <= 0 do
-    query |> where(as(:transaction).block_number < ^block_number)
-  end
-
-  defp page_internal_transactions(query, %PagingOptions{
-         key: %{
-           block_number: 0,
-           transaction_index: 0,
-           internal_transaction_index: nil
-         }
-       }) do
-    query |> where(as(:transaction).block_number == 0 and as(:transaction).index == 0)
-  end
-
-  defp page_internal_transactions(query, %PagingOptions{
-         key: %{
-           block_number: 0,
-           transaction_index: transaction_index,
-           internal_transaction_index: nil
-         }
-       }) do
-    query
-    |> where(as(:transaction).block_number == 0 and as(:transaction).index <= ^transaction_index)
-  end
-
-  defp page_internal_transactions(query, %PagingOptions{
-         key: %{
-           block_number: block_number,
-           transaction_index: transaction_index,
-           internal_transaction_index: nil
-         }
        }) do
     query
     |> where(
@@ -606,53 +574,6 @@ defmodule Explorer.Chain.AdvancedFilter do
        when block_number < 0 do
     fn query, unnested? ->
       query |> where(false) |> query_function.(unnested?)
-    end
-  end
-
-  defp page_token_transfers(query_function, %PagingOptions{
-         key: %{
-           block_number: block_number,
-           transaction_index: transaction_index,
-           token_transfer_index: nil,
-           internal_transaction_index: nil
-         }
-       })
-       when block_number > 0 and transaction_index <= 0 do
-    fn query, unnested? ->
-      query |> where([token_transfer], token_transfer.block_number < ^block_number) |> query_function.(unnested?)
-    end
-  end
-
-  defp page_token_transfers(query_function, %PagingOptions{
-         key: %{
-           block_number: 0,
-           transaction_index: 0,
-           token_transfer_index: nil,
-           internal_transaction_index: nil
-         }
-       }) do
-    fn query, unnested? ->
-      query
-      |> where(as(:transaction).block_number == 0 and as(:transaction).index == 0)
-      |> query_function.(unnested?)
-    end
-  end
-
-  defp page_token_transfers(query_function, %PagingOptions{
-         key: %{
-           block_number: 0,
-           transaction_index: transaction_index,
-           token_transfer_index: nil,
-           internal_transaction_index: nil
-         }
-       }) do
-    fn query, unnested? ->
-      query
-      |> where(
-        [token_transfer],
-        token_transfer.block_number == 0 and as(:transaction).index < ^transaction_index
-      )
-      |> query_function.(unnested?)
     end
   end
 
