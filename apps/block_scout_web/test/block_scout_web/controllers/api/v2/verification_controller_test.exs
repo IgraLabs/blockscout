@@ -19,11 +19,14 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
   setup do
     configuration = Application.get_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour)
     Application.put_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour, enabled: false)
+    # Capture the adapter in force so on_exit restores it, rather than
+    # assuming the default and discarding whatever else may have set it.
+    tesla_adapter = Application.get_env(:tesla, :adapter)
     Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
 
     on_exit(fn ->
       Application.put_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour, configuration)
-      Application.put_env(:tesla, :adapter, Explorer.Mock.TeslaAdapter)
+      Application.put_env(:tesla, :adapter, tesla_adapter)
     end)
   end
 
@@ -129,6 +132,9 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
         assert %{"message" => "Already verified"} = json_response(request, 200)
       end
 
+      # Fetches a compiler from binaries.soliditylang.org and waits up to 300s for
+      # a real verification result. Excluded by default -- see test_helper.exs.
+      @tag :compiler_download
       test "success verification", %{conn: conn} do
         before = Application.get_env(:explorer, :solc_bin_api_url)
 
@@ -308,6 +314,9 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
         assert %{"message" => "Already verified"} = json_response(request, 200)
       end
 
+      # Fetches a compiler from binaries.soliditylang.org and waits up to 300s for
+      # a real verification result. Excluded by default -- see test_helper.exs.
+      @tag :compiler_download
       test "success verification", %{conn: conn} do
         before = Application.get_env(:explorer, :solc_bin_api_url)
 
@@ -375,6 +384,9 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
           eth_bytecode_db?: true
         )
 
+        # Bound here, not in setup: this test restores the adapter itself at the
+        # end rather than via on_exit.
+        tesla_adapter = Application.get_env(:tesla, :adapter)
         Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
 
         Bypass.expect_once(bypass, "POST", "/api/v2//verifier/vyper/sources%3Averify-multi-part", fn conn ->
@@ -431,7 +443,7 @@ defmodule BlockScoutWeb.API.V2.VerificationControllerTest do
         assert response["is_blueprint"] == true
 
         Application.put_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour, old_env)
-        Application.put_env(:tesla, :adapter, Explorer.Mock.TeslaAdapter)
+        Application.put_env(:tesla, :adapter, tesla_adapter)
         Bypass.down(bypass)
       end
     end

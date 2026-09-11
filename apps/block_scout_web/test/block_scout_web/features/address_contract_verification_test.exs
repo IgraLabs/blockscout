@@ -6,6 +6,10 @@ defmodule BlockScoutWeb.AddressContractVerificationTest do
   alias Explorer.Factory
   alias Plug.Conn
 
+  # Real contract verification: needs a downloaded compiler.
+
+  @moduletag :compiler_download
+
   setup do
     bypass = Bypass.open()
 
@@ -14,11 +18,14 @@ defmodule BlockScoutWeb.AddressContractVerificationTest do
 
     Application.put_env(:explorer, :solc_bin_api_url, "http://localhost:#{bypass.port}")
 
+    # Capture the adapter in force so on_exit restores it, rather than
+    # assuming the default and discarding whatever else may have set it.
+    tesla_adapter = Application.get_env(:tesla, :adapter)
     Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
 
     on_exit(fn ->
       Application.put_env(:explorer, Explorer.SmartContract.RustVerifierInterfaceBehaviour, configuration)
-      Application.put_env(:tesla, :adapter, Explorer.Mock.TeslaAdapter)
+      Application.put_env(:tesla, :adapter, tesla_adapter)
     end)
 
     {:ok, bypass: bypass}

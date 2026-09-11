@@ -7,7 +7,23 @@ File.mkdir_p!(junit_folder)
 # Counter `test --no-start`.  `--no-start` is needed for `:indexer` compatibility
 {:ok, _} = Application.ensure_all_started(:explorer)
 
-ExUnit.configure(formatters: [JUnitFormatter, ExUnit.CLIFormatter])
+# :compiler_download marks suites that compile Solidity for real. They need a solc
+# binary and fetch it from binaries.soliditylang.org when the build cache does
+# not already hold it, which made them fail unpredictably in CI on cache state
+# rather than on anything in the code under test.
+#
+# They are excluded by default and NOT deleted -- run them deliberately with:
+#
+#     mix test --include compiler_download
+#
+# CI runs them on a schedule rather than per-PR, so a genuine regression in
+# verification is still caught, just not on a path where a cold cache can block
+# an unrelated change.
+ExUnit.configure(
+  formatters: [JUnitFormatter, ExUnit.CLIFormatter],
+  exclude: [:compiler_download]
+)
+
 ExUnit.start()
 
 {:ok, _} = Application.ensure_all_started(:ex_machina)

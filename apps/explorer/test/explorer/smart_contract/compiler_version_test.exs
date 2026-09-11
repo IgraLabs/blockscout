@@ -20,11 +20,16 @@ defmodule Explorer.SmartContract.CompilerVersionTest do
     setup do
       bypass = Bypass.open()
 
+      # Capture the adapter actually in force before changing it, so on_exit
+      # restores that value rather than assuming the default -- assuming the
+      # default silently discards whatever else may have set it.
+      tesla_adapter = Application.get_env(:tesla, :adapter)
+      Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
+
       on_exit(fn ->
-        Application.put_env(:tesla, :adapter, Explorer.Mock.TeslaAdapter)
+        Application.put_env(:tesla, :adapter, tesla_adapter)
       end)
 
-      Application.put_env(:tesla, :adapter, Tesla.Adapter.Mint)
       Application.put_env(:explorer, :solc_bin_api_url, "http://localhost:#{bypass.port}")
 
       {:ok, bypass: bypass}
