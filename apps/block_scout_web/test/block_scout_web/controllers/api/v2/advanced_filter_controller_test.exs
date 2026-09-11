@@ -226,6 +226,107 @@ defmodule BlockScoutWeb.API.V2.AdvancedFilterControllerTest do
       check_paginated_response(AdvancedFilter.list(), response["items"], response_2nd_page["items"])
     end
 
+    # Regression: a page that ends exactly on a transaction row must not drop that
+    # transaction's own token transfers from the next page.
+    #
+    # `page_token_transfers/2` has a dedicated clause for a cursor with
+    # `transaction_index <= 0` that pages with `token_transfer.block_number <
+    # cursor_block_number`, excluding the cursor's whole block -- and with it every
+    # token transfer belonging to the very transaction the cursor points at. The
+    # general clause (`transaction_index > 0`) keeps them via `index <= cursor_index`.
+    # Observed on Igra mainnet: 10/10 boundaries landing on transaction index 0 lost
+    # rows, 0/10 landing on index >= 1 did.
+    test "does not drop token transfers when a page ends on transaction index 0", %{conn: conn} do
+      # Oldest block: one transaction at index 0 owning 3 token transfers.
+      target = :transaction |> insert() |> with_block()
+      insert_list(3, :token_transfer, transaction: target, block_number: target.block_number)
+
+      # 49 newer transactions in a later block, so the first page is exactly
+      # [49 newer transactions, target] and the cursor lands on `target` while its
+      # token transfers are still unread.
+      insert_list(49, :transaction) |> with_block()
+
+      request = get(conn, "/api/v2/advanced-filters")
+      assert response = json_response(request, 200)
+
+      # Precondition: the boundary really is the target transaction row itself.
+      assert length(response["items"]) == 50
+      last_item = List.last(response["items"])
+      assert last_item["hash"] == to_string(target.hash)
+      assert last_item["transaction_index"] == 0
+      assert last_item["token_transfer_index"] == nil
+
+      request_2nd_page = get(conn, "/api/v2/advanced-filters", response["next_page_params"])
+      assert response_2nd_page = json_response(request_2nd_page, 200)
+
+      # The three token transfers of `target` must appear on page 2.
+      check_paginated_response(AdvancedFilter.list(), response["items"], response_2nd_page["items"])
+    end
+
+    # Control for the test above: identical shape, but the cursor lands on a
+    # transaction at index 1, which takes the general clause. This one passes today,
+    # which is what localises the defect to the `transaction_index <= 0` clause.
+    test "does not drop token transfers when a page ends on transaction index 1", %{conn: conn} do
+      # Block 0 has its own pair of cursor clauses, one of which is separately
+      # broken (`block_number == 0 and index < cursor_index` drops the cursor's own
+      # transfers). Consume block 0 so this control exercises the general clause.
+      _genesis = insert(:block)
+
+      block = insert(:block)
+      _index_0_transaction = :transaction |> insert() |> with_block(block, index: 0)
+      target = :transaction |> insert() |> with_block(block, index: 1)
+      insert_list(3, :token_transfer, transaction: target, block_number: block.number)
+
+      insert_list(49, :transaction) |> with_block()
+
+      request = get(conn, "/api/v2/advanced-filters")
+      assert response = json_response(request, 200)
+
+      assert length(response["items"]) == 50
+      last_item = List.last(response["items"])
+      assert last_item["hash"] == to_string(target.hash)
+      assert last_item["block_number"] > 0
+      assert last_item["transaction_index"] == 1
+      assert last_item["token_transfer_index"] == nil
+
+      request_2nd_page = get(conn, "/api/v2/advanced-filters", response["next_page_params"])
+      assert response_2nd_page = json_response(request_2nd_page, 200)
+
+      check_paginated_response(AdvancedFilter.list(), response["items"], response_2nd_page["items"])
+    end
+
+    # `page_internal_transactions/2` carried the same `transaction_index <= 0` clause
+    # as `page_token_transfers/2`, so internal transactions were dropped at the same
+    # boundary.
+    test "does not drop internal transactions when a page ends on transaction index 0", %{conn: conn} do
+      target = :transaction |> insert() |> with_block()
+
+      for i <- 1..3 do
+        insert(:internal_transaction,
+          transaction: target,
+          block_number: target.block_number,
+          transaction_index: target.index,
+          index: i
+        )
+      end
+
+      insert_list(49, :transaction) |> with_block()
+
+      request = get(conn, "/api/v2/advanced-filters")
+      assert response = json_response(request, 200)
+
+      assert length(response["items"]) == 50
+      last_item = List.last(response["items"])
+      assert last_item["hash"] == to_string(target.hash)
+      assert last_item["transaction_index"] == 0
+      assert last_item["internal_transaction_index"] == nil
+
+      request_2nd_page = get(conn, "/api/v2/advanced-filters", response["next_page_params"])
+      assert response_2nd_page = json_response(request_2nd_page, 200)
+
+      check_paginated_response(AdvancedFilter.list(), response["items"], response_2nd_page["items"])
+    end
+
     test "filter by transaction_type", %{conn: conn} do
       30 |> insert_list(:transaction) |> with_block()
 
