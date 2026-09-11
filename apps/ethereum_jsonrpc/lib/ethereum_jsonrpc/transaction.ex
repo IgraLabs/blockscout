@@ -394,6 +394,7 @@ defmodule EthereumJSONRPC.Transaction do
     put_if_present(result, transaction, [
       {"creates", :created_contract_address_hash},
       {"block_timestamp", :block_timestamp},
+      {"wall_clock_timestamp", :wall_clock_timestamp},
       {"r", :r},
       {"s", :s},
       {"v", :v, %{default: 0}},
@@ -440,6 +441,7 @@ defmodule EthereumJSONRPC.Transaction do
     put_if_present(result, transaction, [
       {"creates", :created_contract_address_hash},
       {"block_timestamp", :block_timestamp},
+      {"wall_clock_timestamp", :wall_clock_timestamp},
       {"r", :r},
       {"s", :s},
       {"v", :v, %{default: 0}},
@@ -482,6 +484,7 @@ defmodule EthereumJSONRPC.Transaction do
     put_if_present(result, transaction, [
       {"creates", :created_contract_address_hash},
       {"block_timestamp", :block_timestamp},
+      {"wall_clock_timestamp", :wall_clock_timestamp},
       {"r", :r},
       {"s", :s},
       {"v", :v, %{default: 0}}
@@ -521,6 +524,7 @@ defmodule EthereumJSONRPC.Transaction do
     put_if_present(result, transaction, [
       {"creates", :created_contract_address_hash},
       {"block_timestamp", :block_timestamp},
+      {"wall_clock_timestamp", :wall_clock_timestamp},
       {"r", :r},
       {"s", :s},
       {"v", :v, %{default: 0}}
@@ -561,6 +565,7 @@ defmodule EthereumJSONRPC.Transaction do
     put_if_present(result, transaction, [
       {"creates", :created_contract_address_hash},
       {"block_timestamp", :block_timestamp},
+      {"wall_clock_timestamp", :wall_clock_timestamp},
       {"r", :r},
       {"s", :s},
       {"v", :v, %{default: 0}}
@@ -747,16 +752,26 @@ defmodule EthereumJSONRPC.Transaction do
     }
 
   """
-  def to_elixir(transaction, block_timestamp \\ nil)
+  def to_elixir(transaction, block_timestamp \\ nil, wall_clock_timestamp \\ nil)
 
-  def to_elixir(transaction, block_timestamp) when is_map(transaction) do
-    initial = (block_timestamp && %{"block_timestamp" => block_timestamp}) || %{}
+  def to_elixir(transaction, block_timestamp, wall_clock_timestamp) when is_map(transaction) do
+    initial =
+      %{}
+      |> put_unless_nil("block_timestamp", block_timestamp)
+      |> put_unless_nil("wall_clock_timestamp", wall_clock_timestamp)
+
     Enum.into(transaction, initial, &entry_to_elixir/1)
   end
 
-  def to_elixir(transaction, _block_timestamp) when is_binary(transaction) do
+  def to_elixir(transaction, _block_timestamp, _wall_clock_timestamp) when is_binary(transaction) do
     nil
   end
+
+  # Keeps the seeded map free of nil entries: a nil wall_clock_timestamp must be
+  # absent rather than present-and-nil, so the params mapping omits it entirely
+  # and the column keeps whatever the database already holds.
+  defp put_unless_nil(map, _key, nil), do: map
+  defp put_unless_nil(map, key, value), do: Map.put(map, key, value)
 
   def eth_call_request(id, block_number, data, to, from, gas, gas_price, value) do
     block =

@@ -1,5 +1,8 @@
 defmodule EthereumJSONRPC.Igra.WallClock.BlockParamsTest do
-  use ExUnit.Case, async: true
+  # async: false -- this suite mutates Application env, which is process-global.
+  # Running it concurrently leaks dual_write_enabled into unrelated suites and
+  # turns decoding on underneath them.
+  use ExUnit.Case, async: false
 
   alias EthereumJSONRPC.Igra.WallClock
   alias EthereumJSONRPC.Igra.WallClock.BlockParams
@@ -144,6 +147,72 @@ defmodule EthereumJSONRPC.Igra.WallClock.BlockParamsTest do
         if params.wall_clock_decode_status != @status_ok do
           assert is_nil(params.wall_clock_timestamp), "status #{params.wall_clock_decode_status} carried a timestamp"
         end
+      end
+    end
+  end
+
+  describe "timestamp_for/1 -- the value stamped onto a block's transactions" do
+    test "nil while disabled, so transactions are untouched" do
+      enable(false)
+      assert BlockParams.timestamp_for(elixir()) == nil
+    end
+
+    test "matches the block's own wall_clock_timestamp exactly" do
+      enable(true)
+
+      # A transaction carrying a different instant from its own block would be
+      # worse than carrying none: it would look authoritative and be wrong.
+      assert BlockParams.timestamp_for(elixir()) == BlockParams.merge(%{}, elixir()).wall_clock_timestamp
+    end
+
+    test "nil for every non-ok outcome, never a partial value" do
+      enable(true)
+
+      for elixir <- [
+            %{"number" => @height},
+            elixir(@height, "0xzz"),
+            elixir(@height, "0x" <> String.duplicate("0", 64)),
+            %{"parentBeaconBlockRoot" => @root}
+          ] do
+        assert BlockParams.timestamp_for(elixir) == nil, "#{inspect(elixir)} should yield nil"
+      end
+    end
+
+    test "genesis yields nil rather than a timestamp" do
+      enable(true)
+      assert BlockParams.timestamp_for(elixir(0, "0x" <> String.duplicate("0", 64))) == nil
+    end
+  end
+
+  describe "raw JSON-RPC block shapes" do
+    setup do
+      enable(true)
+      :ok
+    end
+
+    test "a hex-quantity height is accepted, not a crash" do
+      # entry_to_elixir/2 calls timestamp_for/1 while the block is still raw, so
+      # "number" is a quantity like "0x0". This raised FunctionClauseError from
+      # inside block parsing, which aborts the import of the whole block.
+      assert BlockParams.timestamp_for(%{"number" => "0xD62E47", "parentBeaconBlockRoot" => @root}) ==
+               BlockParams.timestamp_for(elixir())
+    end
+
+    test "merge/2 accepts a hex-quantity height too" do
+      params = BlockParams.merge(%{}, %{"number" => "0xD62E47", "parentBeaconBlockRoot" => @root})
+
+      assert params.wall_clock_decode_status == @status_ok
+      assert %DateTime{} = params.wall_clock_timestamp
+    end
+
+    test "an unusable height is a decode failure, never a raise" do
+      for number <- [nil, "0x", "not-a-quantity", -1, %{}, "0xzz"] do
+        params = BlockParams.merge(%{}, %{"number" => number, "parentBeaconBlockRoot" => @root})
+
+        assert params.wall_clock_decode_status == @status_decode_failed,
+               "#{inspect(number)} should be a decode failure"
+
+        assert BlockParams.timestamp_for(%{"number" => number, "parentBeaconBlockRoot" => @root}) == nil
       end
     end
   end

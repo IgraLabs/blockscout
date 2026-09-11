@@ -954,8 +954,15 @@ defmodule EthereumJSONRPC.Block do
     {key, timestamp_to_datetime(timestamp)}
   end
 
-  defp entry_to_elixir({"transactions" = key, transactions}, %{"timestamp" => block_timestamp}) do
-    {key, Transactions.to_elixir(transactions, timestamp_to_datetime(block_timestamp))}
+  defp entry_to_elixir({"transactions" = key, transactions}, %{"timestamp" => block_timestamp} = block) do
+    # nil unless dual-write is enabled and the block decodes, so transactions are
+    # stamped with exactly their own block's recovered time and nothing else.
+    {key,
+     Transactions.to_elixir(
+       transactions,
+       timestamp_to_datetime(block_timestamp),
+       IgraWallClockBlockParams.timestamp_for(block)
+     )}
   end
 
   defp entry_to_elixir({"withdrawals" = key, nil}, _block) do
