@@ -1,4 +1,8 @@
-FROM hexpm/elixir:1.19.4-erlang-27.3.4.6-alpine-3.22.2 AS builder-deps
+# Igra: OTP 27.3.4.19 + Alpine 3.22.7, not upstream's 27.3.4.6 + 3.22.2 (still in
+# v11.3.3): fixes Erlang ssl CVE-2026-89422 (TLS 1.3 client impersonation; the
+# backend is a TLS client of the RPC) and OpenSSL 3.5.4 -> 3.5.9. Keep both FROMs
+# and OTP_VERSION/ELIXIR_VERSION in .github/workflows/config.yml in step.
+FROM hexpm/elixir:1.19.6-erlang-27.3.4.19-alpine-3.22.7 AS builder-deps
 
 WORKDIR /app
 
@@ -51,7 +55,7 @@ RUN mkdir -p /opt/release && \
     mv _build/${MIX_ENV}/rel/blockscout /opt/release
 
 ##############################################################
-FROM hexpm/elixir:1.19.4-erlang-27.3.4.6-alpine-3.22.2
+FROM hexpm/elixir:1.19.6-erlang-27.3.4.19-alpine-3.22.7
 
 WORKDIR /app
 
